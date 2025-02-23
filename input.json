@@ -1,0 +1,47 @@
+{
+    "rules": [
+      {
+        "rule_name": "ProfitCalculation",
+        "conditions": [
+          {
+            "expression": "transaction_amount > 60"
+          }
+        ],
+        "actions": [
+          {
+            "output_col_name": "profit",
+            "operation": "productCost + margin"
+          },
+          {
+            "output_col_name": "totalCost",
+            "operation": "productCost * margin"
+          }
+        ]
+      },
+      {
+        "rule_name": "StandardizeNames",
+        "conditions": [
+          {
+            "expression": "customer_name != ''"
+          }
+        ],
+        "actions": [
+          {
+            "output_col_name": "normalized_name",
+            "operation": "lower(customer_name)"
+          }
+        ]
+      },
+      {
+        "rule_name": "SumOfProfitAndTotalCost",
+        "conditions": [],
+        "actions": [
+          {
+            "output_col_name": "sumOfProfitAndTotalCost",
+            "operation": "profit + totalCost"
+          }
+        ]
+      }
+    ]
+  }
+  
