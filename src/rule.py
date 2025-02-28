@@ -120,7 +120,7 @@ class Rule:
 
         return set_conditions
 
-    def apply(self, df: pyspark.sql.DataFrame):
+    def apply(self, df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame:
         """
         Applies the rule to the dataframe, calling the execute method of each action.
 
@@ -141,7 +141,7 @@ class Rule:
 
         return resultant_df
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Example of the string representation of a rule:
         Rule rule_name

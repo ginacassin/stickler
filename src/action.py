@@ -5,7 +5,7 @@ import pyspark
 from pydantic import BaseModel, Field
 from pyspark.sql.functions import col, expr, when
 
-from src.config.consts import OPERATION, OUTPUT_COL_NAME
+from src.config.consts import OPERATION, OUTPUT_COL_NAME, OTHERWISE
 
 
 class ActionConfig(BaseModel):
@@ -15,12 +15,14 @@ class ActionConfig(BaseModel):
     Each action is of the form:
     {
         "OUTPUT_COL_NAME": "new_column_name",
-        "OPERATION": "expression"
+        "OPERATION": "expression",
+        "OTHERWISE": "expression"
     }
     """
 
     output_col_name: str = Field(alias=OUTPUT_COL_NAME)
     operation: str = Field(alias=OPERATION)
+    otherwise: str = Field(alias=OTHERWISE, default=None)
 
 
 class Action:
@@ -44,6 +46,7 @@ class Action:
         """
         self.output_col_name = action_config.output_col_name
         self.operation = action_config.operation
+        self.otherwise = action_config.otherwise
 
     def execute(
         self,
@@ -62,6 +65,8 @@ class Action:
         """
         if self.output_col_name in df.columns:
             otherwise_value = col(self.output_col_name)
+        elif self.otherwise is not None:
+            otherwise_value = expr(self.otherwise)
         else:
             otherwise_value = None
 

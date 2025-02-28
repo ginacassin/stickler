@@ -14,7 +14,8 @@
           },
           {
             "output_col_name": "totalCost",
-            "operation": "productCost * margin"
+            "operation": "productCost * margin",
+            "otherwise": "0"
           }
         ]
       },
