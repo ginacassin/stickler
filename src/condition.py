@@ -2,8 +2,8 @@
     Condition interface
 """
 import pyspark
-from pyspark.sql.functions import expr
 from pydantic import BaseModel, Field
+from pyspark.sql.functions import expr
 
 from src.config.consts import EXPRESSION
 

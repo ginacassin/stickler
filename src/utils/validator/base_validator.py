@@ -8,7 +8,7 @@ from pyspark.sql.dataframe import DataFrame
 from src.rule import Rule
 
 
-class BaseValidator(ABC): # pylint: disable=too-few-public-methods
+class BaseValidator(ABC):  # pylint: disable=too-few-public-methods
     """
     Abstract base class for rule validation.
     Each validator checks a specific aspect of the rule definition.

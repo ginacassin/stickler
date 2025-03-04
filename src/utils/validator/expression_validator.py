@@ -9,7 +9,7 @@ from src.rule import Rule
 from src.utils.validator.base_validator import BaseValidator
 
 
-class ExpressionValidator(BaseValidator): # pylint: disable=too-few-public-methods
+class ExpressionValidator(BaseValidator):  # pylint: disable=too-few-public-methods
     """
     Ensures that expressions in conditions and actions are valid Spark SQL expressions.
 
@@ -37,7 +37,7 @@ class ExpressionValidator(BaseValidator): # pylint: disable=too-few-public-metho
         Args:
             rule (Rule): The rule to be validated.
             df (DataFrame): The DataFrame to be used for validation.
-        
+
         Raises:
             ValueError: If any expression in the conditions or actions is invalid.
         """

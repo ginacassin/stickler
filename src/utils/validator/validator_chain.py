@@ -35,7 +35,7 @@ class ValidatorChain:
     def validate(self, rules: List[Rule], df: DataFrame) -> None:
         """
         Initialize the context with the DataFrame's original columns.
-        
+
         Args:
             rules (List[Rule]): List of rules to validate.
             df (DataFrame): DataFrame to validate against.

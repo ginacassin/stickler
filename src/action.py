@@ -5,7 +5,7 @@ import pyspark
 from pydantic import BaseModel, Field
 from pyspark.sql.functions import col, expr, when
 
-from src.config.consts import OPERATION, OUTPUT_COL_NAME, OTHERWISE
+from src.config.consts import OPERATION, OTHERWISE, OUTPUT_COL_NAME
 
 
 class ActionConfig(BaseModel):
@@ -34,9 +34,11 @@ class Action:
     Attributes:
         output_col_name (str): The name of the column to be created/modified.
         operation (str): The operation to be performed on the column.
+        otherwise (str): The operation to be performed if the conditions are not met.
+        rule_name (str): The name of the rule to which the action belongs.
     """
 
-    def __init__(self, action_config: ActionConfig):
+    def __init__(self, action_config: ActionConfig, rule_name: str):
         """
         Initializes the action.
 
@@ -47,6 +49,7 @@ class Action:
         self.output_col_name = action_config.output_col_name
         self.operation = action_config.operation
         self.otherwise = action_config.otherwise
+        self.rule_name = rule_name
 
     def execute(
         self,
@@ -62,6 +65,7 @@ class Action:
             in order for the action to be applied.
         Returns:
             (pyspark.sql.DataFrame): Resultant DataFrame after executing the action.
+            It also contains the history column respective to the action.
         """
         if self.output_col_name in df.columns:
             otherwise_value = col(self.output_col_name)
@@ -70,10 +74,26 @@ class Action:
         else:
             otherwise_value = None
 
-        return df.withColumn(
+        df = df.withColumn(
             self.output_col_name,
             when(set_conditions, expr(self.operation)).otherwise(otherwise_value),
         )
+
+        return df.withColumn(  # Add action history column
+            self.get_history_column_name(), df[self.output_col_name]
+        )
+
+    def get_history_column_name(self) -> str:
+        """
+        Returns the name of the history column for this action.
+        It's of the form "rule_name_output_col_name". For example, if the rule name is
+        "rule1" and the output column name is "new_column", the history column name will
+        be "rule1_new_column".
+
+        Returns:
+            (str): The name of the history column.
+        """
+        return f"{self.rule_name}_{self.output_col_name}"
 
     def __str__(self) -> str:
         """

@@ -30,8 +30,10 @@ class ReferenceValidator(BaseValidator):
 
     Attributes:
         IDENTIFIER_REGEX (Literal): A regex pattern for matching valid SQL identifiers.
-        ignore_words (Set[str]): A set of words to ignore when extracting potential column references.
-        df_current_column_names(Set): A set of column names that have been defined in the DataFrame so far.
+        ignore_words (Set[str]): A set of words to ignore when extracting potential
+        column references.
+        df_current_column_names(Set): A set of column names that have been defined
+        in the DataFrame so far.
     """
 
     IDENTIFIER_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
@@ -44,7 +46,7 @@ class ReferenceValidator(BaseValidator):
         when extracting potential column references from an expression string. It also adds "true"
         and "false" to the list of words to ignore, as these are not valid column names.
 
-        It also initializes a set of column names that have been defined in the DataFrame so far. 
+        It also initializes a set of column names that have been defined in the DataFrame so far.
         This set is updated as new columns are defined in the DataFrame by the rules.
         """
         super().__init__()
@@ -84,8 +86,8 @@ class ReferenceValidator(BaseValidator):
             df (DataFrame): The DataFrame to validate the rule against.
 
         Raises:
-            ValueError: If a column referenced in a rule's conditions or actions does not exist in the
-            original DataFrame schema or has not been defined in a prior rule.
+            ValueError: If a column referenced in a rule's conditions or actions does not exist
+            in the original DataFrame schema or has not been defined in a prior rule.
         """
         # If this is the first rule, initialize the set of column names
         if self.df_current_column_names is None:

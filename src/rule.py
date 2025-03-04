@@ -6,6 +6,7 @@ from typing import List
 
 import pyspark
 from pydantic import BaseModel, Field, field_validator
+from pyspark.sql.functions import when
 
 from src.action import Action, ActionConfig
 from src.condition import Condition, ConditionConfig
@@ -90,7 +91,9 @@ class Rule:
                 Condition(condition) for condition in rule_config.conditions
             ]
 
-        self.actions = [Action(action) for action in rule_config.actions]
+        self.actions = [
+            Action(action, self.rule_name) for action in rule_config.actions
+        ]
 
         logger.debug(
             "Rule %s initialized with %d conditions and %d actions.",
@@ -129,6 +132,7 @@ class Rule:
 
         Returns:
             resultant_df(pyspark.sql.DataFrame): Resultant dataframe after applying the rule.
+            It also adds the history column that determines if the rule was applied or not.
         """
         logger.debug("Applying rule: %s", self.rule_name)
         set_conditions = self.evaluate_rule_conditions()
@@ -139,7 +143,10 @@ class Rule:
 
         logger.debug("Rule %s applied successfully.", self.rule_name)
 
-        return resultant_df
+        return resultant_df.withColumn(
+            self.rule_name,
+            when(set_conditions, True).otherwise(False),
+        )
 
     def __str__(self) -> str:
         """
@@ -149,6 +156,9 @@ class Rule:
         Condition1, Condition2, ...
         Actions
         Action1, Action2, ...
+
+        Returns:
+            str: String representation of the rule.
         """
         return (
             f"Rule {self.rule_name}\n"
