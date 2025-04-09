@@ -6,6 +6,8 @@ The input file is a text file with the following format:
     "rules": [
         {
             "rule_name": "rule_name1",
+            "execution_type": "cascade"
+            "cascade_group": 0,
             "conditions": [
                 {
                     "expression": "expression"
@@ -24,6 +26,8 @@ The input file is a text file with the following format:
 
 RULES_STARTER = "rules"
 RULE_NAME = "rule_name"
+EXECUTION_TYPE = "execution_type"
+CASCADE_GROUP = "cascade_group"
 CONDITIONS = "conditions"
 EXPRESSION = "expression"
 ACTIONS = "actions"

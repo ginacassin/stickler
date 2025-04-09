@@ -1,7 +1,7 @@
 """
     RuleEngine
 """
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import pyspark
 from pydantic import BaseModel, Field
@@ -85,10 +85,22 @@ class RuleEngine:
 
         original_columns = df.columns
         history_columns = []
+        
+        # Dictionary to keep track of applied rules in groups
+        groups: Dict[int, List[str]] = {}
 
         for rule in self.rules:
-            df = rule.apply(df)
+            # Get names of all rules belonging to the same group as the current rule
+            applied_rules_in_groups = set()
+            for key, value in groups.items():
+                applied_rules_in_groups.union(set(value))
+            
+            df = rule.apply(df, applied_rules_in_groups)
             logger.info("%s", str(rule))
+
+            # Add rule to the executed list
+            for group in rule.cascade_group:
+                groups.setdefault(group, []).append(rule.rule_name)
 
             # Get names of all the history columns in the DataFrame
             history_columns.append(rule.rule_name)

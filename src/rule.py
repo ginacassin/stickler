@@ -2,7 +2,7 @@
     Rule interface
 """
 from functools import reduce
-from typing import List
+from typing import List, Set
 
 import pyspark
 from pydantic import BaseModel, Field, field_validator
@@ -10,8 +10,9 @@ from pyspark.sql.functions import when
 
 from src.action import Action, ActionConfig
 from src.condition import Condition, ConditionConfig
-from src.config.consts import ACTIONS, CONDITIONS, RULE_NAME
+from src.config.consts import ACTIONS, CONDITIONS, RULE_NAME, EXECUTION_TYPE, CASCADE_GROUP
 from src.utils.logger import logger
+from src.rule_type_enum import ExecutionType
 
 
 class RuleConfig(BaseModel):
@@ -21,6 +22,8 @@ class RuleConfig(BaseModel):
     Each rule is of the form:
     {
         "RULE_NAME": "rule_name",
+        "EXECUTION_TYPE": "Cascade/Accumulative"
+        "CASCADE_GROUP": int/[int],
         "CONDITIONS": [
             {
                 ConditionConfig (can be empty)
@@ -37,6 +40,8 @@ class RuleConfig(BaseModel):
     """
 
     rule_name: str = Field(alias=RULE_NAME)
+    execution_type: ExecutionType = Field(alias=EXECUTION_TYPE, default=ExecutionType.ACCUMULATIVE)
+    cascade_group: List[int] = Field(alias=CASCADE_GROUP, default=[0])
     conditions: List[ConditionConfig] = Field(alias=CONDITIONS, default=[])
     actions: List[ActionConfig] = Field(alias=ACTIONS)
 
@@ -57,6 +62,12 @@ class RuleConfig(BaseModel):
             raise ValueError(f"{ACTIONS} must contain at least one action.")
         return value
 
+    @field_validator(CASCADE_GROUP, mode="before")
+    @classmethod
+    def ensure_list_cascade_group(cls, value):
+        """Ensures that cascade_group is always a list."""
+        return [value] if isinstance(value, int) else value
+
 
 class Rule:
     """
@@ -65,6 +76,8 @@ class Rule:
 
     Attributes:
         rule_name(str): Name of the rule.
+        execution_type(ExecutionType): Type of the rule (Cascade/Accumulative).
+        cascade_group(list[int]): List of groups to which the rule belongs.
         conditions(list[Condition]): List of conditions that must be met to apply the rule.
         actions(list[Action]): List of actions that will be applied if the conditions are met.
     """
@@ -82,6 +95,9 @@ class Rule:
         """
         self.rule_name = rule_config.rule_name
 
+        self.execution_type = rule_config.execution_type
+        self.cascade_group = rule_config.cascade_group
+
         if rule_config.conditions == []:
             # If no conditions are provided, it means that the rule will be applied to all the data,
             # so we add a default condition that will always be true.
@@ -92,7 +108,7 @@ class Rule:
             ]
 
         self.actions = [
-            Action(action, self.rule_name) for action in rule_config.actions
+            Action(action, self.rule_name, self.execution_type) for action in rule_config.actions
         ]
 
         logger.debug(
@@ -123,12 +139,13 @@ class Rule:
 
         return set_conditions
 
-    def apply(self, df: pyspark.sql.DataFrame) -> pyspark.sql.DataFrame:
+    def apply(self, df: pyspark.sql.DataFrame, applied_rules_in_groups: Set[str]) -> pyspark.sql.DataFrame:
         """
         Applies the rule to the dataframe, calling the execute method of each action.
 
         Args:
             df(pyspark.sql.DataFrame): data to which the rule will be applied.
+            applied_rules_in_groups(Set[str]): Set of rules that have been applied in the cascade group.
 
         Returns:
             resultant_df(pyspark.sql.DataFrame): Resultant dataframe after applying the rule.
@@ -139,7 +156,7 @@ class Rule:
 
         resultant_df = df.select("*")
         for action in self.actions:
-            resultant_df = action.execute(resultant_df, set_conditions)
+            resultant_df = action.execute(resultant_df, set_conditions, applied_rules_in_groups)
 
         logger.debug("Rule %s applied successfully.", self.rule_name)
 
