@@ -12,7 +12,7 @@ from src.action import Action, ActionConfig
 from src.condition import Condition, ConditionConfig
 from src.config.consts import ACTIONS, CONDITIONS, RULE_NAME, EXECUTION_TYPE, CASCADE_GROUP
 from src.utils.logger import logger
-from src.rule_type_enum import ExecutionType
+from src.enums.rule_type_enum import ExecutionType
 
 
 class RuleConfig(BaseModel):

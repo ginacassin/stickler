@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from pyspark.sql.functions import col, expr, when, lit
 
 from src.config.consts import OPERATION, OTHERWISE, OUTPUT_COL_NAME
-from src.rule_type_enum import ExecutionType
+from src.enums.rule_type_enum import ExecutionType
 
 
 class ActionConfig(BaseModel):
