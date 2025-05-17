@@ -2,10 +2,8 @@
     Action interface
 """
 import pyspark
-from typing import Set
-from functools import reduce
 from pydantic import BaseModel, Field
-from pyspark.sql.functions import col, expr, when, lit
+from pyspark.sql.functions import col, expr, lit, when
 
 from src.config.consts import OPERATION, OTHERWISE, OUTPUT_COL_NAME
 from src.enums.rule_type_enum import ExecutionType
@@ -42,7 +40,9 @@ class Action:
         rule_type (ExecutionType): The type of the rule to which the action belongs.
     """
 
-    def __init__(self, action_config: ActionConfig, rule_name: str, rule_type: ExecutionType):
+    def __init__(
+        self, action_config: ActionConfig, rule_name: str, rule_type: ExecutionType
+    ):
         """
         Initializes the action.
 
@@ -62,7 +62,7 @@ class Action:
         self,
         df: pyspark.sql.DataFrame,
         set_conditions: pyspark.sql.column.Column,
-        applied_rules_in_groups: Set[str],
+        cascade_blocked: pyspark.sql.column.Column,
     ) -> pyspark.sql.DataFrame:
         """
         Executes the action on the given DataFrame.
@@ -71,7 +71,8 @@ class Action:
             df (pyspark.sql.DataFrame): Input DataFrame to which the action will be applied.
             set_conditions (pyspark.sql.column.Column): Conditions that need to be met
             in order for the action to be applied.
-            applied_rules_in_groups (Set[str]): Set of rules that have been applied in the cascade group.
+            cascade_blocked (pyspark.sql.column.Column): Conditions that block the action
+            from being applied in the cascade group.
         Returns:
             (pyspark.sql.DataFrame): Resultant DataFrame after executing the action.
             It also contains the history column respective to the action.
@@ -79,18 +80,22 @@ class Action:
         # Determine "otherwise" value
         if self.otherwise is not None:
             otherwise_value = expr(self.otherwise)
-        elif self.output_col_name in df.columns: # If otherwise is None, maintain the previous value
+        elif (
+            self.output_col_name in df.columns
+        ):  # If otherwise is None, maintain the previous value
             otherwise_value = col(self.output_col_name)
         else:
             otherwise_value = lit(None)
 
         # Determine if each row is affected or not by the cascade condition
         if self.rule_type == ExecutionType.CASCADE:
-            cascade_blocked = reduce(
-                lambda x, y: x | y, [col(rule_name) for rule_name in applied_rules_in_groups]
-            )
             # Capture the previous values as a separate column before modifying df
-            df = df.withColumn("_previous_values", col(self.output_col_name) if self.output_col_name in df.columns else lit(None))
+            df = df.withColumn(
+                "_previous_values",
+                col(self.output_col_name)
+                if self.output_col_name in df.columns
+                else lit(None),
+            )
 
         # Apply the action
         df = df.withColumn(
@@ -102,13 +107,15 @@ class Action:
         if self.rule_type == ExecutionType.CASCADE:
             df = df.withColumn(
                 self.output_col_name,
-                when(cascade_blocked, col("_previous_values")).otherwise(col(self.output_col_name)),
-            ).drop("_previous_values")  # Cleanup temporary column
+                when(cascade_blocked, col("_previous_values")).otherwise(
+                    col(self.output_col_name)
+                ),
+            ).drop(
+                "_previous_values"
+            )  # Cleanup temporary column
 
         # Add action history column
-        return df.withColumn(
-            self.get_history_column_name(), df[self.output_col_name]
-        )
+        return df.withColumn(self.get_history_column_name(), df[self.output_col_name])
 
     def get_history_column_name(self) -> str:
         """

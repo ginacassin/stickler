@@ -29,14 +29,11 @@ class ReferenceValidator(BaseValidator):
     operations being performed on them.
 
     Attributes:
-        IDENTIFIER_REGEX (Literal): A regex pattern for matching valid SQL identifiers.
         ignore_words (Set[str]): A set of words to ignore when extracting potential
         column references.
         df_current_column_names(Set): A set of column names that have been defined
         in the DataFrame so far.
     """
-
-    IDENTIFIER_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
 
     def __init__(self):
         """
@@ -66,15 +63,39 @@ class ReferenceValidator(BaseValidator):
             expression (str): The expression string to extract column references from.
 
         Returns:
-            List[str]: A list of potential column references extracted from the expression string.
+            List[str]: A list of unique potential column references extracted from the
+            expression string.
         """
-        tokens: List[str] = re.findall(self.IDENTIFIER_REGEX, expression)
-        # Filter out tokens that are SQL keywords or function names
-        return [
-            token
-            for token in tokens
-            if token.lower() not in self.ignore_words and not token.isdigit()
-        ]
+        identifier_regex = r"[a-zA-Z_][a-zA-Z0-9_]*"
+
+        # Get spans of quoted regions (e.g. 'a', "a")
+        quoted_spans = [m.span() for m in re.finditer(r"(['\"]).*?\1", expression)]
+
+        tokens = []
+        # Use re.finditer so we get span positions for each token.
+        for token_match in re.finditer(identifier_regex, expression):
+            token = token_match.group(0)
+            token_span = token_match.span()
+
+            # Check if the token is within any quoted region.
+            in_quote = any(
+                start <= token_span[0] and token_span[1] <= end
+                for (start, end) in quoted_spans
+            )
+            if not in_quote:
+                tokens.append(token)
+
+        # Filter tokens for rules: not an ignore word, not a digit, not an operator (like AND, OR)
+        unique_columns = []
+        for token in tokens:
+            if (
+                token.lower() not in self.ignore_words
+                and not token.isdigit()
+                and token not in unique_columns  # ensure uniqueness
+            ):
+                unique_columns.append(token)
+
+        return unique_columns
 
     def validate(self, rule: Rule, df: DataFrame) -> None:
         """
@@ -119,6 +140,5 @@ class ReferenceValidator(BaseValidator):
                         f"Column '{col}' doesn't exist."
                     )
 
-        # After validating the rule, add new output columns to the context
-        for action in rule.actions:
+            # After validating the action, add new output column to the context
             self.df_current_column_names.add(action.output_col_name)

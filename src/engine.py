@@ -1,10 +1,11 @@
 """
     RuleEngine
 """
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 import pyspark
 from pydantic import BaseModel, Field
+from pyspark.sql import SparkSession
 
 from src.config.consts import RULES_STARTER
 from src.rule import Rule, RuleConfig
@@ -43,19 +44,37 @@ class RuleEngine:
 
     Attributes:
         rules (List[Rule]): List of Rules, loaded from the configuration.
+        udfs (Dict[str, pyspark.sql.functions.udf]): Dictionary of user-defined functions (UDFs).
+        validator_chain (ValidatorChain): Chain of validators to validate rules and DataFrame.
     """
 
-    def __init__(self, rules_config: RulesConfig):
+    def __init__(
+        self,
+        rules_config: RulesConfig,
+        udfs: Dict[str, pyspark.sql.functions.udf] = None,
+    ):
         """
         Initializes the rule engine with rule configurations.
 
         Args:
             rules_config (RulesConfig): Dictionary containing rule configurations,
             which is read with json.load() from a JSON file.
+            udfs (Dict[str, pyspark.sql.functions.udf], optional): Dictionary of
+            user-defined functions (UDFs) to be used in rules.
         """
         logger.info("Initializing RuleEngine with provided rule configurations.")
         self.rules = [Rule(rule_data) for rule_data in rules_config.rules]
         logger.debug("Loaded %d rules from configuration.", len(self.rules))
+        self.udfs = udfs if udfs else {}
+
+        spark = SparkSession.getActiveSession()
+        # Register UDFs in the Spark session
+        for udf_name, udf_func in self.udfs.items():
+            if not hasattr(udf_func, "func"):  # Validate if the function is a UDF
+                raise ValueError(f"UDF {udf_name} is not a valid UDF function.")
+            spark.udf.register(udf_name, udf_func)
+            logger.debug('UDF "%s" registered successfully.', udf_name)
+        logger.debug("%d user-defined functions (UDFs) loaded.", len(self.udfs))
 
         # Initialize the validator chain with the required validators.
         self.validator_chain = ValidatorChain()
@@ -85,16 +104,16 @@ class RuleEngine:
 
         original_columns = df.columns
         history_columns = []
-        
+
         # Dictionary to keep track of applied rules in groups
         groups: Dict[int, List[str]] = {}
 
         for rule in self.rules:
             # Get names of all rules belonging to the same group as the current rule
             applied_rules_in_groups = set()
-            for key, value in groups.items():
-                applied_rules_in_groups.union(set(value))
-            
+            for group in rule.cascade_group:
+                applied_rules_in_groups.update(set(groups.get(group, [])))
+
             df = rule.apply(df, applied_rules_in_groups)
             logger.info("%s", str(rule))
 

@@ -1,5 +1,5 @@
 """
-Main example script to demonstrate the usage of stickler engine.
+    Main example script to demonstrate the usage of stickler engine.
 """
 import json
 import logging

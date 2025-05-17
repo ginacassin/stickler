@@ -6,17 +6,17 @@ The input file is a text file with the following format:
     "rules": [
         {
             "rule_name": "rule_name1",
-            "execution_type": "cascade"
-            "cascade_group": 0,
+            "execution_type": "cascade"/"accumulative"
+            "cascade_group": [0, 1, 2] / 0,
             "conditions": [
                 {
-                    "expression": "expression"
+                    "expression": "sql_expression"
                 }, …
             ],
             "actions": [
                 {
-                    "output_col_name": "output",
-                    "operation": "operation_def"
+                    "output_col_name": "column_name",
+                    "operation": "sql_expression"
                 }, …
             ]
         }, …

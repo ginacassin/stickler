@@ -10,9 +10,15 @@ from pyspark.sql.functions import when
 
 from src.action import Action, ActionConfig
 from src.condition import Condition, ConditionConfig
-from src.config.consts import ACTIONS, CONDITIONS, RULE_NAME, EXECUTION_TYPE, CASCADE_GROUP
-from src.utils.logger import logger
+from src.config.consts import (
+    ACTIONS,
+    CASCADE_GROUP,
+    CONDITIONS,
+    EXECUTION_TYPE,
+    RULE_NAME,
+)
 from src.enums.rule_type_enum import ExecutionType
+from src.utils.logger import logger
 
 
 class RuleConfig(BaseModel):
@@ -22,7 +28,7 @@ class RuleConfig(BaseModel):
     Each rule is of the form:
     {
         "RULE_NAME": "rule_name",
-        "EXECUTION_TYPE": "Cascade/Accumulative"
+        "EXECUTION_TYPE": "cascade"/"accumulative",
         "CASCADE_GROUP": int/[int],
         "CONDITIONS": [
             {
@@ -40,10 +46,37 @@ class RuleConfig(BaseModel):
     """
 
     rule_name: str = Field(alias=RULE_NAME)
-    execution_type: ExecutionType = Field(alias=EXECUTION_TYPE, default=ExecutionType.ACCUMULATIVE)
+    execution_type: ExecutionType = Field(
+        alias=EXECUTION_TYPE, default=ExecutionType.ACCUMULATIVE
+    )
     cascade_group: List[int] = Field(alias=CASCADE_GROUP, default=[0])
     conditions: List[ConditionConfig] = Field(alias=CONDITIONS, default=[])
     actions: List[ActionConfig] = Field(alias=ACTIONS)
+
+    @field_validator(EXECUTION_TYPE, mode="before")
+    @classmethod
+    def parse_execution_type(cls, value):
+        """
+        Converts the execution type string to the corresponding ExecutionType enum.
+
+        Args:
+            value(str): The execution type as a string.
+
+        Returns:
+            ExecutionType: The corresponding ExecutionType enum.
+
+        Raises:
+            ValueError: If the string does not match "cascade" or "accumulative".
+        """
+        if isinstance(value, str):
+            value = value.strip().lower()
+            if value == "cascade":
+                return ExecutionType.CASCADE
+            if value == "accumulative":
+                return ExecutionType.ACCUMULATIVE
+        raise ValueError(
+            f"Invalid execution type: {value}. Must be 'cascade' or 'accumulative'."
+        )
 
     @field_validator(ACTIONS)
     @classmethod
@@ -108,7 +141,8 @@ class Rule:
             ]
 
         self.actions = [
-            Action(action, self.rule_name, self.execution_type) for action in rule_config.actions
+            Action(action, self.rule_name, self.execution_type)
+            for action in rule_config.actions
         ]
 
         logger.debug(
@@ -139,13 +173,42 @@ class Rule:
 
         return set_conditions
 
-    def apply(self, df: pyspark.sql.DataFrame, applied_rules_in_groups: Set[str]) -> pyspark.sql.DataFrame:
+    def evaluate_cascade_conditions(
+        self, applied_rules_in_groups: Set[str]
+    ) -> pyspark.sql.column.Column:
+        """
+        Evaluates cascade conditions for the rule.
+
+        If the rule is of accumulative type, it returns a column with all values set to False.
+        Otherwise, it evaluates the cascade conditions based on the applied rules in
+        the cascade group.
+
+        Returns:
+            pyspark.sql.column.Column: A column representing the cascade conditions.
+        """
+        if self.execution_type == ExecutionType.ACCUMULATIVE:
+            return pyspark.sql.functions.lit(False)
+
+        cascade_blocked = reduce(
+            lambda x, y: x | y,
+            [
+                pyspark.sql.functions.col(rule_name)
+                for rule_name in applied_rules_in_groups
+            ],
+            pyspark.sql.functions.lit(False),
+        )
+        return cascade_blocked
+
+    def apply(
+        self, df: pyspark.sql.DataFrame, applied_rules_in_groups: Set[str]
+    ) -> pyspark.sql.DataFrame:
         """
         Applies the rule to the dataframe, calling the execute method of each action.
 
         Args:
             df(pyspark.sql.DataFrame): data to which the rule will be applied.
-            applied_rules_in_groups(Set[str]): Set of rules that have been applied in the cascade group.
+            applied_rules_in_groups(Set[str]): Set of rules that have been applied in
+            the cascade group.
 
         Returns:
             resultant_df(pyspark.sql.DataFrame): Resultant dataframe after applying the rule.
@@ -154,15 +217,17 @@ class Rule:
         logger.debug("Applying rule: %s", self.rule_name)
         set_conditions = self.evaluate_rule_conditions()
 
+        cascade_blocked = self.evaluate_cascade_conditions(applied_rules_in_groups)
+
         resultant_df = df.select("*")
         for action in self.actions:
-            resultant_df = action.execute(resultant_df, set_conditions, applied_rules_in_groups)
+            resultant_df = action.execute(resultant_df, set_conditions, cascade_blocked)
 
         logger.debug("Rule %s applied successfully.", self.rule_name)
 
         return resultant_df.withColumn(
             self.rule_name,
-            when(set_conditions, True).otherwise(False),
+            when(set_conditions & ~cascade_blocked, True).otherwise(False),
         )
 
     def __str__(self) -> str:
