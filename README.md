@@ -60,7 +60,6 @@ rule_engine_instance = engine.RuleEngine(rules_configuration)
 Stickler supports PySpark UDFs in rule expressions. Define your UDFs and pass them to the engine as a dictionary:
 
 ```python
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 
 # Example UDF definitions
